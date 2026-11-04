@@ -1,0 +1,118 @@
+name: Build
+
+# Code changes are built and checked on every push. Changes to only the README, pictures or docs
+# skip the build. A release (the Download link, and the update installed copies are offered) only
+# goes out when you ask: Actions → Build → Run workflow with "Publish a release" ticked, or
+# `gh workflow run build.yml -f release=true`.
+on:
+  push:
+    paths-ignore: ['**.md', 'LICENSE', 'images/**', 'docs/**', 'previews/**', 'tools/ad/**']
+  pull_request:
+    paths-ignore: ['**.md', 'LICENSE', 'images/**', 'docs/**', 'previews/**', 'tools/ad/**']
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a release (users get offered the update)
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    permissions:
+      contents: write # to publish a release when main changes
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # full history: the build number is the commit count
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # Your Developer ID certificate (from the repo's secrets) goes into a throwaway keychain for this build only.
+      - name: Load signing certificate
+        env:
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p "" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "" "$kc"
+          echo "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          echo "SIGN_IDENTITY=$(security find-identity -v -p codesigning "$kc" | awk -F'"' '/Developer ID Application/{print $2; exit}')" >> "$GITHUB_ENV"
+
+      - name: Build Keyper.dmg
+        run: ./build.sh dist
+
+      # Apple checks the app and issues a ticket; stapling it to the DMG lets it open without warnings, even offline.
+      - name: Notarize with Apple
+        timeout-minutes: 45   # Apple usually answers in minutes; don't let a stuck request hang for hours
+        env:
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          dmg=dist/Keyper.dmg
+          key="$RUNNER_TEMP/notary.p8"
+          echo "$NOTARY_KEY" | base64 --decode > "$key"
+          auth=(--key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID")
+          codesign --force --sign "$SIGN_IDENTITY" --timestamp "$dmg"
+          out="$(xcrun notarytool submit "$dmg" "${auth[@]}" --wait --timeout 30m --output-format json)"
+          echo "$out"
+          status="$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+          if [[ "$status" != Accepted ]]; then
+            xcrun notarytool log "$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')" "${auth[@]}"
+            exit 1
+          fi
+          # Apple's ticket server sometimes drops the connection; try a few times.
+          for i in 1 2 3 4 5; do xcrun stapler staple "$dmg" && break; [[ $i == 5 ]] && exit 1; sleep 20; done
+          rm "$key"
+
+      - name: Verify the download
+        run: |
+          hdiutil verify dist/Keyper.dmg
+          for i in 1 2 3 4 5; do xcrun stapler validate dist/Keyper.dmg && break; [[ $i == 5 ]] && exit 1; sleep 20; done
+          spctl --assess --type open --context context:primary-signature -v dist/Keyper.dmg
+          mount="$(hdiutil attach -nobrowse -readonly dist/Keyper.dmg | awk -F'\t' '/Volumes/{print $NF}')"
+          app="$mount/Keyper.app"
+          test -x "$app/Contents/MacOS/Keyper"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --verify --deep --strict --verbose "$app"
+          spctl --assess --type execute -vv "$app"   # Gatekeeper's verdict: must say "Notarized Developer ID"
+          lipo "$app/Contents/MacOS/Keyper" -verify_arch arm64 x86_64
+          test -f "$mount/How to install.txt"
+          hdiutil detach "$mount"
+
+      - name: Smoke test (the panel draws)
+        run: |
+          swift build -c release
+          for page in mine mac settings; do
+            "$(swift build -c release --show-bin-path)/Keyper" --render "$RUNNER_TEMP/$page.png" --page $page
+            test -s "$RUNNER_TEMP/$page.png"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Keyper
+          path: dist/Keyper.dmg
+
+      # Every update to main becomes the new download behind the README's Download link.
+      - name: Publish release
+        if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+        run: |
+          # appcast.xml tells installed copies (Sparkle) about this version; see tools/sparkle.sh.
+          source tools/sparkle.sh && sparkle_appcast dist/Keyper.dmg "Keyper" keyper "build-$GITHUB_RUN_NUMBER"
+          version="$(grep -A1 CFBundleShortVersionString build.sh | grep -o '[0-9][0-9.]*' | head -1)"
+          gh release create "build-$GITHUB_RUN_NUMBER" dist/Keyper.dmg dist/appcast.xml \
+            --target "$GITHUB_SHA" --latest \
+            --title "Keyper $version (build $GITHUB_RUN_NUMBER)" --generate-notes

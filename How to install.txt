@@ -1,0 +1,10 @@
+How to install Keyper
+
+1. Drag Keyper into the Applications folder (in this window).
+2. Open Keyper from Applications.
+   Click "Open" when macOS asks if you're sure.
+
+A keycap with ⌘ appears in your menu bar. Click it to see your shortcuts.
+If you don't see it, your menu bar may be full: look behind any « arrow.
+
+Needs macOS 14 or newer. No permissions, no account, works offline.
