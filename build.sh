@@ -3,7 +3,7 @@
 # Needs only the Swift toolchain; no Xcode project.
 #   ./build.sh          build + install + relaunch
 #   ./build.sh dist     build dist/Keyper.dmg to share (doesn't install); GitHub builds this on every push
-#   .build/debug/Keyper --render out.png --page mine|mac|settings   draw the panel to a picture
+#   .build/debug/Keyper --render out.png --page mine|settings   draw the panel to a picture
 set -e
 cd "$(dirname "$0")"
 source tools/sparkle.sh   # self-updating (Sparkle itself comes from the Swift package)
