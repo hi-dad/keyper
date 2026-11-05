@@ -4,7 +4,7 @@
 
 **A tiny Mac menu bar app that keeps the hotkeys you use in one list, grouped by app.**
 
-<img src="images/keyper.gif" alt="Keyper's panel: your shortcuts grouped by app, and Settings" width="460">
+<img src="images/keyper.gif" alt="Keyper's panel: your shortcuts grouped by app, and Settings" width="400">
 
 ### [⬇️ Download Keyper](https://github.com/hi-dad/keyper/releases/latest/download/Keyper.dmg)
 Free · macOS 14 or newer · no permissions, no account, offline
