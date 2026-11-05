@@ -210,11 +210,9 @@ final class Store: ObservableObject {
         save()
     }
 
-    func move(_ id: String, before target: String) {
+    func moveSections(from: IndexSet, to: Int) {
         var ids = sections.map(\.id)
-        guard id != target, let from = ids.firstIndex(of: id) else { return }
-        ids.remove(at: from)
-        ids.insert(id, at: ids.firstIndex(of: target) ?? ids.count)
+        ids.move(fromOffsets: from, toOffset: to)
         order = ids
         save()
     }

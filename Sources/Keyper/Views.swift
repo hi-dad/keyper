@@ -304,6 +304,9 @@ struct SettingsPage: View {
             }
             .pickerStyle(.segmented).labelsHidden()
 
+            label("Section order · drag a row to move it").padding(.top, 8)
+            SectionOrder()
+
             label("Sections").padding(.top, 8)
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(store.sections) { s in sectionBlock(s) }
@@ -329,15 +332,10 @@ struct SettingsPage: View {
 
     func sectionBlock(_ s: Section) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            SectionHeader(name: s.name, icon: s.icon, color: s.color) {
-                Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary).font(.system(size: sz(12)))
-                    .frame(width: 16, height: 24).contentShape(Rectangle())
-                    .onDrag { NSItemProvider(object: s.id as NSString) }
-                    .help("Drag to reorder")
-            }
+            SectionHeader(name: s.name, icon: s.icon, color: s.color)
             .overlay(alignment: .topLeading) {
                 // The icon tile opens the icon and color picker.
-                Color.clear.frame(width: 24, height: 24).contentShape(Rectangle()).offset(x: 25)
+                Color.clear.frame(width: 24, height: 24).contentShape(Rectangle())
                     .onTapGesture { picking = s.id }
                     .popover(isPresented: Binding(get: { picking == s.id }, set: { if !$0 { picking = nil } })) {
                         StylePicker(section: s).environmentObject(store)
@@ -358,7 +356,6 @@ struct SettingsPage: View {
                 }
             }
         }
-        .onDrop(of: [.text], delegate: SectionDrop(target: s.id, store: store))
     }
 
     func smallButton(_ icon: String, _ color: Color, _ help: String, _ action: @escaping () -> Void) -> some View {
@@ -447,6 +444,31 @@ struct AddShortcut: View {
     }
 }
 
+/// The order of sections, as a plain list you can drag whole rows in (much easier to grab than a small handle).
+struct SectionOrder: View {
+    @EnvironmentObject var store: Store
+    var body: some View {
+        let sections = store.sections
+        List {
+            ForEach(sections) { s in
+                HStack(spacing: 9) {
+                    IconTile(icon: s.icon, color: s.color)
+                    Text(s.name).font(.system(size: sz(13)))
+                    Spacer()
+                    Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 3)
+            }
+            .onMove { from, to in store.moveSections(from: from, to: to) }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollDisabled(true)
+        .frame(height: CGFloat(sections.count) * sz(34) + 6)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
+    }
+}
+
 struct RenameField: View {
     @EnvironmentObject var store: Store
     let item: Item
@@ -490,15 +512,3 @@ struct StylePicker: View {
     var currentColor: String { current?.color ?? section.color }
 }
 
-struct SectionDrop: DropDelegate {
-    let target: String
-    let store: Store
-    func performDrop(info: DropInfo) -> Bool {
-        guard let p = info.itemProviders(for: [.text]).first else { return false }
-        _ = p.loadObject(ofClass: NSString.self) { obj, _ in
-            guard let id = obj as? String else { return }
-            DispatchQueue.main.async { store.move(id, before: target) }
-        }
-        return true
-    }
-}
