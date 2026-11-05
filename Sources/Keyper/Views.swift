@@ -37,7 +37,7 @@ struct PanelView: View {
             Divider()
             bottomBar.padding(.horizontal, 10).padding(.vertical, 7)
         }
-        .frame(width: sz(300))
+        .frame(width: store.panelWidth)
         .frame(height: ui.picture ? nil : 600)
         // Built-in controls (dropdowns, pickers, text boxes, buttons) follow the Text size setting too.
         .controlSize(store.textScale < 1 ? .small : store.textScale > 1.2 ? .extraLarge : store.textScale > 1 ? .large : .regular)
@@ -189,30 +189,18 @@ struct KeyCap: View {
     }
 }
 
-/// A shortcut's name with its keys on the right, or, when both don't fit on one line (long names or
-/// keys written as words), the keys on a line of their own under the name.
+/// A shortcut's name with its keys on the right, always on one line. The panel widens to fit the
+/// longest row (Store.panelWidth), so nothing has to wrap.
 struct NameAndKeys<Mark: View>: View {
     let name: Text
     let keys: String
     @ViewBuilder var mark: Mark
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 6) {
-                label.fixedSize()
-                Spacer(minLength: 12)
-                KeyCap(keys: keys)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                label
-                KeyCap(keys: keys)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-    var label: some View {
         HStack(spacing: 6) {
-            name.font(.system(size: sz(13)))
+            name.font(.system(size: sz(13))).lineLimit(1).fixedSize()
             mark
+            Spacer(minLength: 12)
+            KeyCap(keys: keys)
         }
     }
 }
@@ -281,6 +269,7 @@ struct MacPage: View {
         VStack(alignment: .leading, spacing: 14) {
             PageHeader(title: "All Mac shortcuts") { ui.page = .mine }
             TextField("Search", text: $ui.search).textFieldStyle(.roundedBorder)
+                .onAppear { DispatchQueue.main.async { endEditing() } }   // don't start with the box selected
             ForEach(Catalog.mac, id: \.id) { cat in
                 let q = ui.search.lowercased()
                 let items = cat.items.filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.display.lowercased().contains(q) }

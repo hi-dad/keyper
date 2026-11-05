@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -227,6 +228,34 @@ final class Store: ObservableObject {
     }
 
     func show(_ keys: String) -> String { Keys.display(keys, style: style) }
+
+    /// Wide enough for the longest row on My shortcuts and All Mac shortcuts (at least 300), so names and
+    /// keys always fit on one line. The same on every page, so the panel doesn't change width.
+    var panelWidth: CGFloat {
+        func w(_ t: String, _ weight: NSFont.Weight = .regular) -> CGFloat {
+            NSAttributedString(string: t, attributes: [.font: NSFont.systemFont(ofSize: sz(13), weight: weight)]).size().width
+        }
+        func cap(_ keys: String) -> CGFloat {
+            if !separateTiles { return w(show(keys), .medium) + 16 }
+            let steps = Keys.parts(keys, style: style)
+            let tiles = steps.flatMap(\.keys)
+            return tiles.map { w($0, .medium) + 12 }.reduce(0, +) + CGFloat(max(tiles.count - 1, 0)) * 3
+                + CGFloat(max(steps.count - 1, 0)) * (w("→") + 10)
+        }
+        var widest: CGFloat = 0
+        for s in sections {
+            for it in s.items { widest = max(widest, 12 + w(it.name) + 12 + cap(it.keys)) }
+        }
+        for cat in Catalog.mac {
+            for r in cat.items {
+                let st = macState(r)
+                let mark: CGFloat = st.changedFrom != nil ? 18 : 0
+                widest = max(widest, 12 + w(r.display) + mark + 12 + cap(st.keys) + 6 + sz(26))
+            }
+        }
+        let screen = (NSScreen.main?.visibleFrame.width ?? 1400) - 40
+        return min(max(sz(300), ceil(widest + 28 + 6)), screen)
+    }
 
     func setTextScale(_ s: CGFloat) {
         textScale = s

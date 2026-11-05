@@ -89,9 +89,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.button?.image = MenuBarIcon.image
         item.button?.target = self
         item.button?.action = #selector(toggleDrop)
-        // For checking the panel on screen: `open Keyper.app --args -openOnLaunch YES [-openPage settings]`.
+        // For checking the panel on screen: `open Keyper.app --args -openOnLaunch YES [-openPage settings|mac]`.
         if UserDefaults.standard.bool(forKey: "openOnLaunch") {
-            if UserDefaults.standard.string(forKey: "openPage") == "settings" { UIState.shared.page = .settings }
+            switch UserDefaults.standard.string(forKey: "openPage") {
+            case "settings": UIState.shared.page = .settings
+            case "mac": UIState.shared.page = .mac
+            default: break
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.openDrop() }
         }
     }
