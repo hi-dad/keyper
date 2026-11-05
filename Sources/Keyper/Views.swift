@@ -4,6 +4,9 @@ import UniformTypeIdentifiers
 
 enum Page { case mine, mac, settings }
 
+/// Stop editing whatever text box has the typing cursor.
+func endEditing() { NSApp.keyWindow?.makeFirstResponder(nil) }
+
 final class UIState: ObservableObject {
     static let shared = UIState()
     @Published var page = Page.mine
@@ -30,7 +33,10 @@ struct PanelView: View {
                 content.padding(14)
             } else {
                 // Fills whatever is left, so every page (with or without the tabs) is the same height.
-                ScrollView { content.padding(14) }.frame(maxHeight: .infinity)
+                ScrollView {
+                    content.padding(14)
+                }
+                .frame(maxHeight: .infinity)
             }
             Divider()
             bottomBar.padding(.horizontal, 10).padding(.vertical, 7)
@@ -336,7 +342,7 @@ struct SettingsPage: View {
             }
         }
         // Don't start with a name box selected (typing would replace it); click one to edit.
-        .onAppear { DispatchQueue.main.async { NSApp.keyWindow?.makeFirstResponder(nil) } }
+        .onAppear { DispatchQueue.main.async { endEditing() } }
     }
 
     func label(_ t: String) -> some View {
@@ -478,6 +484,7 @@ struct RenameField: View {
         TextField(item.original, text: $text)
             .textFieldStyle(.roundedBorder).font(.system(size: sz(13)))
             .onAppear { text = item.name }
+            .onSubmit { endEditing() }
             .onChange(of: text) { _, t in store.rename(item.id, original: item.original, to: t) }
     }
 }

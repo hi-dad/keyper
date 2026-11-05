@@ -122,6 +122,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             h.frame = fx.bounds
             p.delegate = self
             drop = p
+            // Clicking anywhere in the panel that isn't a text box lets go of the box you were editing.
+            NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak p] e in
+                guard let p, e.window === p, let root = p.contentView else { return e }
+                var v = root.hitTest(root.convert(e.locationInWindow, from: nil))
+                while let view = v, !(view is NSTextField || view is NSText) { v = view.superview }
+                if v == nil { p.makeFirstResponder(nil) }
+                return e
+            }
             // Resize whenever what's shown changes (page, text size, hidden items...).
             Store.shared.objectWillChange.merge(with: UIState.shared.objectWillChange)
                 .sink { [weak self] _ in DispatchQueue.main.async { self?.fitDrop() } }.store(in: &watchers)
@@ -138,6 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func closeDrop() {
         if drop?.isVisible == true { lastClose = Date() }
+        drop?.makeFirstResponder(nil)   // reopen without a name box still selected
         drop?.orderOut(nil)
         item.button?.highlight(false)
         if let c = clickMonitor { NSEvent.removeMonitor(c); clickMonitor = nil }
