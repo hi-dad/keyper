@@ -23,11 +23,7 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             if ui.page != .settings {
-                Picker("", selection: $ui.page) {
-                    Text("My shortcuts").tag(Page.mine)
-                    Text("All Mac shortcuts").tag(Page.mac)
-                }
-                .pickerStyle(.segmented).labelsHidden()
+                Choice(options: [("My shortcuts", Page.mine), ("All Mac shortcuts", Page.mac)], selection: $ui.page)
                 .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
             }
             if ui.picture {
@@ -39,6 +35,9 @@ struct PanelView: View {
             bottomBar.padding(.horizontal, 10).padding(.vertical, 7)
         }
         .frame(width: sz(400))
+        // Built-in controls (dropdowns, pickers, text boxes, buttons) follow the Text size setting too.
+        .controlSize(store.textScale < 1 ? .small : store.textScale > 1.2 ? .extraLarge : store.textScale > 1 ? .large : .regular)
+        .font(.system(size: sz(13)))
     }
 
     @ViewBuilder var content: some View {
@@ -66,7 +65,7 @@ struct PanelView: View {
                 if ui.page == .settings { ui.page = ui.pageBeforeSettings }
                 else { ui.pageBeforeSettings = ui.page; ui.page = .settings }
             } label: {
-                Image(systemName: "gearshape").font(.system(size: sz(15))).frame(width: 26, height: 26)
+                Image(systemName: "gearshape").font(.system(size: sz(15))).frame(width: sz(26), height: sz(26))
             }
             .buttonStyle(.plain).foregroundStyle(.secondary).help("Settings")
         }
@@ -75,13 +74,37 @@ struct PanelView: View {
 
 // MARK: Pieces
 
+/// A row of choices like a segmented control, but drawn by Keyper so its text follows the Text size setting
+/// (Mac's built-in pickers keep their own text size).
+struct Choice<T: Hashable>: View {
+    let options: [(String, T)]
+    @Binding var selection: T
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options.indices, id: \.self) { i in
+                let (name, value) = options[i]
+                Button { selection = value } label: {
+                    Text(name).font(.system(size: sz(13), weight: selection == value ? .semibold : .regular))
+                        .lineLimit(1).frame(maxWidth: .infinity).padding(.vertical, sz(4))
+                        .background(RoundedRectangle(cornerRadius: 6)
+                            .fill(selection == value ? Color.primary.opacity(0.18) : Color.clear))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+    }
+}
+
 struct IconTile: View {
     let icon: String
     let color: String
     var body: some View {
         let c = Store.color(color)
         Image(systemName: icon).font(.system(size: sz(12), weight: .semibold)).foregroundStyle(c)
-            .frame(width: 24, height: 24)
+            .frame(width: sz(24), height: sz(24))
             .background(RoundedRectangle(cornerRadius: 6).fill(c.opacity(0.2)))
     }
 }
@@ -233,7 +256,7 @@ struct MacPage: View {
                 store.toggle(\.onPage, s.id)
             } label: {
                 Image(systemName: added ? "checkmark" : "plus").font(.system(size: sz(13), weight: .semibold))
-                    .frame(width: 26, height: 26).contentShape(Rectangle())
+                    .frame(width: sz(26), height: sz(26)).contentShape(Rectangle())
             }
             .buttonStyle(.plain).foregroundStyle(added ? Color.green : Color.accentColor)
             .help(added ? "Remove from My shortcuts" : "Add to My shortcuts")
@@ -268,7 +291,7 @@ struct SettingsPage: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Button { ui.page = ui.pageBeforeSettings } label: {
-                    Image(systemName: "chevron.left").font(.system(size: sz(14), weight: .semibold)).frame(width: 24, height: 24)
+                    Image(systemName: "chevron.left").font(.system(size: sz(14), weight: .semibold)).frame(width: sz(24), height: sz(24))
                 }.buttonStyle(.plain)
                 Text("Settings").font(.system(size: sz(16), weight: .semibold))
             }
@@ -277,32 +300,21 @@ struct SettingsPage: View {
                 ForEach([Mod.cmd, .opt, .ctl, .sh]) { m in
                     GridRow {
                         Text(m.word).font(.system(size: sz(13))).frame(maxWidth: .infinity, alignment: .leading)
-                        Picker("", selection: Binding(get: { store.style(m) }, set: { store.setStyle(m, $0) })) {
-                            Text("Symbol \(m.symbol)").tag(KeyStyle.symbol)
-                            Text("Word \"\(m.word)\"").tag(KeyStyle.word)
-                            if m != .sh { Text("Short \"\(m.short)\"").tag(KeyStyle.short) }
-                        }
-                        .labelsHidden().frame(width: 180)
+                        Choice(options: [(m.symbol, KeyStyle.symbol), (m.word, .word)] + (m == .sh ? [] : [(m.short, .short)]),
+                               selection: Binding(get: { store.style(m) }, set: { store.setStyle(m, $0) }))
+                            .frame(width: sz(220))
                     }
                 }
             }
             .padding(.leading, 4)
 
             label("Key tiles").padding(.top, 8)
-            Picker("", selection: Binding(get: { store.separateTiles }, set: { store.setSeparateTiles($0) })) {
-                Text("One per shortcut").tag(false)
-                Text("One per key").tag(true)
-            }
-            .pickerStyle(.segmented).labelsHidden()
+            Choice(options: [("One per shortcut", false), ("One per key", true)],
+                   selection: Binding(get: { store.separateTiles }, set: { store.setSeparateTiles($0) }))
 
             label("Text size").padding(.top, 8)
-            Picker("", selection: Binding(get: { store.textScale }, set: { store.setTextScale($0) })) {
-                Text("Small").tag(CGFloat(0.9))
-                Text("Normal").tag(CGFloat(1))
-                Text("Large").tag(CGFloat(1.15))
-                Text("Larger").tag(CGFloat(1.3))
-            }
-            .pickerStyle(.segmented).labelsHidden()
+            Choice(options: [("Small", CGFloat(0.9)), ("Normal", 1), ("Large", 1.15), ("Larger", 1.3)],
+                   selection: Binding(get: { store.textScale }, set: { store.setTextScale($0) }))
 
             label("Sections").padding(.top, 8)
             VStack(alignment: .leading, spacing: 16) {
@@ -345,7 +357,7 @@ struct SettingsPage: View {
                 }
             .overlay(alignment: .topLeading) {
                 // The icon tile opens the icon and color picker.
-                Color.clear.frame(width: 24, height: 24).contentShape(Rectangle())
+                Color.clear.frame(width: sz(24), height: sz(24)).contentShape(Rectangle())
                     .onTapGesture { picking = s.id }
                     .popover(isPresented: Binding(get: { picking == s.id }, set: { if !$0 { picking = nil } })) {
                         StylePicker(section: s).environmentObject(store)
@@ -370,7 +382,7 @@ struct SettingsPage: View {
 
     func smallButton(_ icon: String, _ color: Color, _ help: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: sz(13))).frame(width: 28, height: 28).contentShape(Rectangle())
+            Image(systemName: icon).font(.system(size: sz(13))).frame(width: sz(28), height: sz(28)).contentShape(Rectangle())
         }
         .buttonStyle(.plain).foregroundStyle(color).help(help)
     }
@@ -411,7 +423,7 @@ struct AddShortcut: View {
                 HStack(spacing: 4) {
                     ForEach([Mod.ctl, .opt, .sh, .cmd]) { m in
                         Button { if mods.contains(m) { mods.remove(m) } else { mods.insert(m) } } label: {
-                            Text(m.symbol).font(.system(size: sz(13), weight: .medium)).frame(width: 28, height: 24)
+                            Text(m.symbol).font(.system(size: sz(13), weight: .medium)).frame(width: sz(28), height: sz(24))
                                 .background(RoundedRectangle(cornerRadius: 6)
                                     .fill(mods.contains(m) ? Color.accentColor : Color.primary.opacity(0.08)))
                                 .foregroundStyle(mods.contains(m) ? Color.white : Color.primary)
@@ -474,7 +486,7 @@ struct StylePicker: View {
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(28), spacing: 6), count: 8), spacing: 6) {
                 ForEach(Catalog.icons, id: \.self) { icon in
                     Button { store.setStyle(section.id, icon: icon) } label: {
-                        Image(systemName: icon).font(.system(size: sz(13))).frame(width: 28, height: 28)
+                        Image(systemName: icon).font(.system(size: sz(13))).frame(width: sz(28), height: sz(28))
                             .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
                             .overlay(RoundedRectangle(cornerRadius: 6)
                                 .stroke(Color.accentColor, lineWidth: currentIcon == icon ? 2 : 0))
@@ -484,9 +496,9 @@ struct StylePicker: View {
             HStack(spacing: 6) {
                 ForEach(Catalog.colors, id: \.self) { c in
                     Button { store.setStyle(section.id, color: c) } label: {
-                        Circle().fill(Store.color(c)).frame(width: 20, height: 20)
+                        Circle().fill(Store.color(c)).frame(width: sz(20), height: sz(20))
                             .overlay(Circle().stroke(Color.primary, lineWidth: currentColor == c ? 2 : 0).padding(-3))
-                    }.buttonStyle(.plain).frame(width: 28, height: 28)
+                    }.buttonStyle(.plain).frame(width: sz(28), height: sz(28))
                 }
             }
         }
