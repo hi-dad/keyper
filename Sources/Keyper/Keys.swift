@@ -75,13 +75,6 @@ enum Keys {
         return template(ctl: mods & 4096 != 0, opt: mods & 2048 != 0, sh: mods & 512 != 0, cmd: mods & 256 != 0, key: key)
     }
 
-    /// From macOS's own shortcut settings (com.apple.symbolichotkeys): modifier flags as in NSEvent.
-    static func fromSymbolic(code: Int, mods: Int) -> String? {
-        guard let key = names[code] else { return nil }
-        return template(ctl: mods & 0x40000 != 0, opt: mods & 0x80000 != 0, sh: mods & 0x20000 != 0,
-                        cmd: mods & 0x100000 != 0, key: key)
-    }
-
     /// From an App Shortcut you added in System Settings, like "@$k" (⇧⌘K).
     static func fromKeyEquivalent(_ s: String) -> String? {
         var ctl = false, opt = false, sh = false, cmd = false

@@ -15,79 +15,19 @@ struct FoundSection {
     let color: String
 }
 
-/// What one built-in Mac shortcut is set to right now.
-struct MacState {
-    var keys: String
-    /// Apple's default, when you changed it.
-    var changedFrom: String?
-    var off = false
-}
-
 /// Reads shortcuts from settings files only. Needs no permissions and changes nothing.
 enum Scanner {
     struct Result {
         var sections: [FoundSection] = []
         var items: [Found] = []
-        var mac: [String: MacState] = [:]
     }
 
     static func scan() -> Result {
         var r = Result()
-        r.mac = macStates()
         ownApps(&r)
         sharedFiles(&r)
         otherApps(&r)
         return r
-    }
-
-    // MARK: macOS's own shortcuts
-
-    static func macStates() -> [String: MacState] {
-        let raw = CFPreferencesCopyAppValue("AppleSymbolicHotKeys" as CFString, "com.apple.symbolichotkeys" as CFString)
-            as? [String: Any] ?? [:]
-        func current(_ id: Int) -> (keys: String?, off: Bool)? {
-            guard let entry = raw[String(id)] as? [String: Any] else { return nil }   // never changed: Apple's default
-            let enabled = (entry["enabled"] as? Bool) ?? ((entry["enabled"] as? Int) == 1)
-            let p = ((entry["value"] as? [String: Any])?["parameters"] as? [Int]) ?? []
-            if !enabled { return (nil, true) }
-            if p.count < 3 { return nil }   // on, with Apple's default keys
-            if p[1] == 65535 { return (nil, true) }
-            return (Keys.fromSymbolic(code: p[1], mods: p[2]), false)
-        }
-        var out: [String: MacState] = [:]
-        var bySymbolic: [Int: String] = [:]
-        for cat in Catalog.mac {
-            for s in cat.items {
-                guard let n = s.symbolic else { continue }
-                var st = MacState(keys: s.keys)
-                if let c = current(n) {
-                    if c.off { st = MacState(keys: "Off", changedFrom: s.keys, off: true) }
-                    else if let k = c.keys, k != s.keys { st = MacState(keys: k, changedFrom: s.keys) }
-                }
-                out[s.id] = st
-                bySymbolic[n] = st.keys
-            }
-        }
-        // Combos built on another shortcut ("{@30} → Space") follow it.
-        for cat in Catalog.mac {
-            for s in cat.items where s.keys.contains("{@") {
-                var k = s.keys, changed = false
-                while let a = k.range(of: "{@"), let b = k[a.upperBound...].firstIndex(of: "}") {
-                    let n = Int(k[a.upperBound..<b]) ?? 0
-                    let def = Catalog.mac.flatMap(\.items).first { $0.symbolic == n }?.keys ?? ""
-                    let now = bySymbolic[n] ?? def
-                    if now != def { changed = true }
-                    k.replaceSubrange(a.lowerBound...b, with: now)
-                }
-                var def = s.keys
-                while let a = def.range(of: "{@"), let b = def[a.upperBound...].firstIndex(of: "}") {
-                    let n = Int(def[a.upperBound..<b]) ?? 0
-                    def.replaceSubrange(a.lowerBound...b, with: Catalog.mac.flatMap(\.items).first { $0.symbolic == n }?.keys ?? "")
-                }
-                out[s.id] = MacState(keys: k, changedFrom: changed ? def : nil)
-            }
-        }
-        return out
     }
 
     // MARK: Apps

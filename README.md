@@ -2,9 +2,9 @@
 
 <img src="images/icon.png" alt="Keyper app icon" width="128">
 
-**A tiny Mac menu bar app that keeps every hotkey you use in one list: yours, your apps', and macOS's own.**
+**A tiny Mac menu bar app that keeps the hotkeys you use in one list, grouped by app.**
 
-<img src="images/keyper.gif" alt="Keyper's panel: My shortcuts grouped by app, the All Mac shortcuts reference, and Settings" width="460">
+<img src="images/keyper.gif" alt="Keyper's panel: your shortcuts grouped by app, and Settings" width="460">
 
 ### [⬇️ Download Keyper](https://github.com/hi-dad/keyper/releases/latest/download/Keyper.dmg)
 Free · macOS 14 or newer · no permissions, no account, offline
@@ -18,9 +18,9 @@ A keycap with ⌘ appears in your menu bar. Can't see it? Look behind any « arr
 
 ## How to use
 
-- **My shortcuts:** the hotkeys you actually use, one section per app. Ones you changed in macOS show up by themselves.
-- **All Mac shortcuts:** a searchable reference. Tap **+** to add one to your page. An orange mark means you changed or turned off that shortcut; hover to see Apple's default.
-- **Settings (gear):** favorite, rename, hide, reorder sections, pick icons and colors, add a shortcut by hand, and choose how keys look (⌘, Command or Cmd; one tile or one per key; text size).
+- **Your shortcuts, one section per app.** Keyper finds hotkeys it can read on its own (App Shortcuts you set in System Settings, and apps that save their hotkeys the common way).
+- **Add the rest yourself** in Settings (gear): **+ Add shortcut** inside any section, or **+ New section** for an app or topic of your own, like Screenshots.
+- **Settings** also lets you favorite, rename, hide and reorder, pick icons and colors, and choose how keys look (⌘, Command or Cmd; one tile or one per key; text size).
 
 Keyper only reads settings files and never changes a hotkey. It re-reads them every time you open it.
 

@@ -37,10 +37,6 @@ final class Store: ObservableObject {
     @Published var renames: [String: String] = [:]
     @Published var favorites: Set<String> = []
     @Published var hidden: Set<String> = []
-    /// Mac shortcuts you added to your page from "All Mac shortcuts".
-    @Published var onPage: Set<String> = []
-    /// Changed Mac shortcuts already added once (so removing one doesn't bring it back).
-    var seenChanged: Set<String> = []
     @Published var order: [String] = []
     @Published var styles: [String: [String: String]] = [:]
     @Published var words: Set<Mod> = [.opt, .ctl]
@@ -71,8 +67,6 @@ final class Store: ObservableObject {
         renames = j["renames"] as? [String: String] ?? [:]
         favorites = Set(j["favorites"] as? [String] ?? [])
         hidden = Set(j["hidden"] as? [String] ?? [])
-        onPage = Set(j["onPage"] as? [String] ?? [])
-        seenChanged = Set(j["seenChanged"] as? [String] ?? [])
         order = j["order"] as? [String] ?? []
         styles = j["styles"] as? [String: [String: String]] ?? [:]
         if let w = j["words"] as? [String] { words = Set(w.compactMap(Mod.init)) }
@@ -89,8 +83,6 @@ final class Store: ObservableObject {
         j["renames"] = renames
         j["favorites"] = favorites.sorted()
         j["hidden"] = hidden.sorted()
-        j["onPage"] = onPage.sorted()
-        j["seenChanged"] = seenChanged.sorted()
         j["order"] = order
         j["styles"] = styles
         j["words"] = words.map(\.rawValue).sorted()
@@ -118,27 +110,13 @@ final class Store: ObservableObject {
 
     private func apply(_ r: Scanner.Result) {
         scan = r
-        // A Mac shortcut you changed (to new keys, not turned off) goes on your page the first time it's seen.
-        var changed = false
-        for (id, st) in r.mac where st.changedFrom != nil && !st.off && !seenChanged.contains(id) {
-            seenChanged.insert(id); onPage.insert(id); changed = true
-        }
-        if changed { save() }
     }
 
     // MARK: What's shown
 
-    func macState(_ s: RefShortcut) -> MacState { scan.mac[s.id] ?? MacState(keys: s.keys) }
-
     /// Every section that has something on your page, in your order.
     var sections: [Section] {
         var all: [Section] = []
-        for cat in Catalog.mac {
-            let items = cat.items.filter { onPage.contains($0.id) }.map { s in
-                item(s.id, s.display, macState(s).keys)
-            }
-            if !items.isEmpty { all.append(section(cat.id, cat.name, cat.icon, cat.color, items)) }
-        }
         for s in scan.sections {
             let items = scan.items.filter { $0.section == s.id }.map { item($0.id, $0.name, $0.keys) }
             if !items.isEmpty { all.append(section(s.id, s.name, s.icon, s.color, items)) }
@@ -156,13 +134,6 @@ final class Store: ObservableObject {
         return all.sorted { rank($0.id) < rank($1.id) }
     }
 
-    /// Section names offered when adding a shortcut by hand.
-    var appNames: [String] {
-        var names = scan.sections.map(\.name)
-        for c in custom { if let a = c["app"], !names.contains(a) { names.append(a) } }
-        return names
-    }
-
     func addCustom(app: String, name: String, keys: String) {
         custom.append(["id": "custom:" + UUID().uuidString, "app": app, "name": name, "keys": keys])
         save()
@@ -177,7 +148,7 @@ final class Store: ObservableObject {
 
     private func rank(_ id: String) -> Int {
         if let i = order.firstIndex(of: id) { return i }
-        let defaults = Catalog.mac.map(\.id) + scan.sections.map(\.id)
+        let defaults = scan.sections.map(\.id)
         return order.count + (defaults.firstIndex(of: id) ?? 999)
     }
 
@@ -229,8 +200,8 @@ final class Store: ObservableObject {
 
     func show(_ keys: String) -> String { Keys.display(keys, style: style) }
 
-    /// Wide enough for the longest row on My shortcuts and All Mac shortcuts (at least 300), so names and
-    /// keys always fit on one line. The same on every page, so the panel doesn't change width.
+    /// Room for typical short names and keys (320), wider only when a longer row needs it, so names and
+    /// keys always fit on one line.
     var panelWidth: CGFloat {
         func w(_ t: String, _ weight: NSFont.Weight = .regular) -> CGFloat {
             NSAttributedString(string: t, attributes: [.font: NSFont.systemFont(ofSize: sz(13), weight: weight)]).size().width
@@ -246,15 +217,8 @@ final class Store: ObservableObject {
         for s in sections {
             for it in s.items { widest = max(widest, 12 + w(it.name) + 12 + cap(it.keys)) }
         }
-        for cat in Catalog.mac {
-            for r in cat.items {
-                let st = macState(r)
-                let mark: CGFloat = st.changedFrom != nil ? 18 : 0
-                widest = max(widest, 12 + w(r.display) + mark + 12 + cap(st.keys) + 6 + sz(26))
-            }
-        }
         let screen = (NSScreen.main?.visibleFrame.width ?? 1400) - 40
-        return min(max(sz(300), ceil(widest + 28 + 6)), screen)
+        return min(max(sz(320), ceil(widest + 28 + 6)), screen)
     }
 
     func setTextScale(_ s: CGFloat) {

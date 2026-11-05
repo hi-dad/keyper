@@ -2,7 +2,7 @@ import ServiceManagement
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum Page { case mine, mac, settings }
+enum Page { case mine, settings }
 
 /// Stop editing whatever text box has the typing cursor.
 func endEditing() { NSApp.keyWindow?.makeFirstResponder(nil) }
@@ -47,7 +47,6 @@ struct PanelView: View {
     @ViewBuilder var content: some View {
         switch ui.page {
         case .mine: MinePage()
-        case .mac: MacPage()
         case .settings: SettingsPage()
         }
     }
@@ -65,13 +64,6 @@ struct PanelView: View {
                 .buttonStyle(.plain).foregroundStyle(.secondary).font(.system(size: sz(12)))
             }
             Spacer()
-            Button {
-                ui.page = ui.page == .mac ? .mine : .mac
-            } label: {
-                Label("Mac shortcuts", systemImage: "command").font(.system(size: sz(12)))
-            }
-            .buttonStyle(.plain).foregroundStyle(ui.page == .mac ? Color.primary : Color.secondary)
-            .help("All Mac shortcuts")
             Button {
                 if ui.page == .settings { ui.page = ui.pageBeforeSettings }
                 else { ui.pageBeforeSettings = ui.page; ui.page = .settings }
@@ -242,7 +234,7 @@ struct MinePage: View {
                 if !items.isEmpty { block(s.name, s.icon, s.color, items) }
             }
             if sections.allSatisfy({ $0.items.isEmpty }) {
-                Text("Add shortcuts from All Mac shortcuts, or install an app with hotkeys.")
+                Text("Add your own shortcuts in Settings (the gear).")
                     .foregroundStyle(.secondary).font(.system(size: sz(13)))
             }
         }
@@ -256,69 +248,6 @@ struct MinePage: View {
                 .opacity(items[i].hidden ? 0.45 : 1)
             }
         }
-    }
-}
-
-// MARK: All Mac shortcuts
-
-struct MacPage: View {
-    @EnvironmentObject var store: Store
-    @EnvironmentObject var ui: UIState
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            PageHeader(title: "All Mac shortcuts") { ui.page = .mine }
-            TextField("Search", text: $ui.search).textFieldStyle(.roundedBorder)
-                .onAppear { DispatchQueue.main.async { endEditing() } }   // don't start with the box selected
-            ForEach(Catalog.mac, id: \.id) { cat in
-                let q = ui.search.lowercased()
-                let items = cat.items.filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.display.lowercased().contains(q) }
-                if !items.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        SectionHeader(name: cat.name, icon: cat.icon, color: cat.color)
-                        Rows(count: items.count) { i in row(items[i]) }
-                    }
-                }
-            }
-        }
-    }
-
-    func row(_ s: RefShortcut) -> some View {
-        let st = store.macState(s)
-        let added = store.onPage.contains(s.id)
-        return HStack(spacing: 6) {
-            NameAndKeys(name: Text(s.display), keys: st.keys) {
-                // You changed this one and it isn't on your page: say so.
-                if let def = st.changedFrom, !added {
-                    ChangedMark(off: st.off, note: st.off
-                        ? "Turned off on your Mac.\nApple's default: \(store.show(def))"
-                        : "Customized on your Mac.\nApple's default: \(store.show(def))")
-                }
-            }
-            Button {
-                store.toggle(\.onPage, s.id)
-            } label: {
-                Image(systemName: added ? "checkmark" : "plus").font(.system(size: sz(13), weight: .semibold))
-                    .frame(width: sz(26), height: sz(26)).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).foregroundStyle(added ? Color.green : Color.accentColor)
-            .help(added ? "Remove from My shortcuts" : "Add to My shortcuts")
-        }
-    }
-}
-
-/// Orange mark on a Mac shortcut you changed (pencil) or turned off (slash). Hovering shows what it was.
-/// A popover, because plain tooltips don't appear in a menu bar panel.
-struct ChangedMark: View {
-    let off: Bool
-    let note: String
-    @State private var showing = false
-    var body: some View {
-        Image(systemName: off ? "slash.circle" : "pencil.circle").foregroundStyle(.orange).font(.system(size: sz(12)))
-            .onHover { showing = $0 }
-            .popover(isPresented: $showing, arrowEdge: .top) {
-                Text(note).font(.system(size: sz(12))).padding(10).fixedSize()
-            }
     }
 }
 
@@ -358,7 +287,7 @@ struct SettingsPage: View {
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(store.sections) { s in sectionBlock(s) }
             }
-            AddShortcut().padding(.top, 4)
+            AddShortcut().padding(.top, 4)   // a new section
 
             Divider().padding(.top, 8)
             Toggle("Open at login", isOn: $atLogin)
@@ -417,6 +346,7 @@ struct SettingsPage: View {
                     }
                 }
             }
+            AddShortcut(section: s.name).padding(.leading, 12).padding(.top, 2)
         }
     }
 
@@ -428,10 +358,12 @@ struct SettingsPage: View {
     }
 }
 
-/// Type in a hotkey Keyper can't read on its own. Modifier buttons plus a key box (not "press the keys"),
+/// Type in a hotkey Keyper can't read on its own, into an existing section (`section`) or a new one. Modifier buttons plus a key box (not "press the keys"),
 /// because pressing another app's hotkey would set that app off instead of reaching Keyper.
 struct AddShortcut: View {
     @EnvironmentObject var store: Store
+    /// The section to add to; nil = this form also asks for a new section's name.
+    var section: String? = nil
     @State private var open = UIState.shared.addFormOpen
     @State private var app = ""
     @State private var name = ""
@@ -447,17 +379,15 @@ struct AddShortcut: View {
 
     var body: some View {
         if !open {
-            Button { open = true } label: { Label("Add a shortcut", systemImage: "plus") }
-                .buttonStyle(.plain).foregroundStyle(Color.accentColor).font(.system(size: sz(13)))
+            Button { open = true } label: {
+                Label(section == nil ? "New section" : "Add shortcut", systemImage: "plus")
+            }
+            .buttonStyle(.plain).foregroundStyle(Color.accentColor).font(.system(size: sz(section == nil ? 13 : 12)))
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Add a shortcut").font(.system(size: sz(13), weight: .semibold))
-                HStack(spacing: 4) {
-                    TextField("App", text: $app).textFieldStyle(.roundedBorder)
-                    Menu {
-                        ForEach(store.appNames, id: \.self) { n in Button(n) { app = n } }
-                    } label: { Image(systemName: "chevron.down") }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Pick an app that's already listed")
+                Text(section.map { "Add to \($0)" } ?? "New section").font(.system(size: sz(13), weight: .semibold))
+                if section == nil {
+                    TextField("Section name, like an app", text: $app).textFieldStyle(.roundedBorder)
                 }
                 TextField("What it does", text: $name).textFieldStyle(.roundedBorder)
                 HStack(spacing: 4) {
@@ -470,7 +400,7 @@ struct AddShortcut: View {
                         }
                         .buttonStyle(.plain).help(m.word)
                     }
-                    TextField("Key, like K or Space", text: $key).textFieldStyle(.roundedBorder)
+                    TextField("Key, like K", text: $key).textFieldStyle(.roundedBorder)
                 }
                 if !key.trimmingCharacters(in: .whitespaces).isEmpty {
                     HStack {
@@ -493,8 +423,8 @@ struct AddShortcut: View {
     }
 
     func add() {
-        let a = app.trimmingCharacters(in: .whitespaces), n = name.trimmingCharacters(in: .whitespaces)
-        if a.isEmpty { problem = "Enter the app's name."; return }
+        let a = section ?? app.trimmingCharacters(in: .whitespaces), n = name.trimmingCharacters(in: .whitespaces)
+        if a.isEmpty { problem = "Enter a section name."; return }
         if n.isEmpty { problem = "Enter what the shortcut does."; return }
         if key.trimmingCharacters(in: .whitespaces).isEmpty { problem = "Enter the key, like K or Space."; return }
         store.addCustom(app: a, name: n, keys: keys)

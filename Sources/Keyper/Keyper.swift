@@ -6,7 +6,7 @@ import SwiftUI
 @main
 enum KeyperMain {
     static func main() {
-        // `Keyper --render out.png [--page mine|mac|settings]` draws the panel to a picture (for checking the
+        // `Keyper --render out.png [--page mine|settings]` draws the panel to a picture (for checking the
         // design and for the README). Works offscreen.
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--render-icon"), i + 1 < args.count {
@@ -39,7 +39,7 @@ enum KeyperMain {
         _ = NSApplication.shared
         let ui = UIState.shared
         ui.picture = true
-        ui.page = page == "mac" ? .mac : page.hasPrefix("settings") ? .settings : .mine
+        ui.page = page.hasPrefix("settings") ? .settings : .mine
         ui.addFormOpen = page == "settings-add"
         Store.shared.refreshNow()
         let view = PanelView().environmentObject(Store.shared).environmentObject(ui)
@@ -89,11 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.button?.image = MenuBarIcon.image
         item.button?.target = self
         item.button?.action = #selector(toggleDrop)
-        // For checking the panel on screen: `open Keyper.app --args -openOnLaunch YES [-openPage settings|mac]`.
+        // For checking the panel on screen: `open Keyper.app --args -openOnLaunch YES [-openPage settings]`.
         if UserDefaults.standard.bool(forKey: "openOnLaunch") {
             switch UserDefaults.standard.string(forKey: "openPage") {
             case "settings": UIState.shared.page = .settings
-            case "mac": UIState.shared.page = .mac
             default: break
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.openDrop() }
