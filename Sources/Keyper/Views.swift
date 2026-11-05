@@ -29,12 +29,14 @@ struct PanelView: View {
             if ui.picture {
                 content.padding(14)
             } else {
-                ScrollView { content.padding(14) }.frame(height: 520)
+                // Fills whatever is left, so every page (with or without the tabs) is the same height.
+                ScrollView { content.padding(14) }.frame(maxHeight: .infinity)
             }
             Divider()
             bottomBar.padding(.horizontal, 10).padding(.vertical, 7)
         }
         .frame(width: sz(400))
+        .frame(height: ui.picture ? nil : 600)
         // Built-in controls (dropdowns, pickers, text boxes, buttons) follow the Text size setting too.
         .controlSize(store.textScale < 1 ? .small : store.textScale > 1.2 ? .extraLarge : store.textScale > 1 ? .large : .regular)
         .font(.system(size: sz(13)))
@@ -333,6 +335,8 @@ struct SettingsPage: View {
                 Button("Quit Keyper") { NSApp.terminate(nil) }
             }
         }
+        // Don't start with a name box selected (typing would replace it); click one to edit.
+        .onAppear { DispatchQueue.main.async { NSApp.keyWindow?.makeFirstResponder(nil) } }
     }
 
     func label(_ t: String) -> some View {

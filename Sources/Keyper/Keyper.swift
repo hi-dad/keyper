@@ -78,6 +78,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var drop: DropPanel?
     var host: NSHostingView<AnyView>?
     var lastClose = Date.distantPast
+    /// Where the open panel hangs from (under the icon).
+    var anchor: NSPoint?
     var clickMonitor: Any?
     var watchers: Set<AnyCancellable> = []
 
@@ -149,8 +151,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let screen = bw.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
         let height = min(ceil(size.height), screen.height - 24), width = ceil(size.width)
         let icon = bw.convertToScreen(b.convert(b.bounds, to: nil))
-        let x = min(max(icon.midX - width / 2, screen.minX + 8), screen.maxX - width - 8)
-        p.setFrame(NSRect(x: x, y: icon.minY - 6 - height, width: width, height: height), display: true)
+        // Placed once per opening, so it doesn't slide sideways while open (other menu bar items changing
+        // width, like a "Running command" label, can nudge Keyper's icon).
+        if p.isVisible == false || anchor == nil { anchor = NSPoint(x: icon.midX, y: icon.minY) }
+        let a = anchor!
+        let x = min(max(a.x - width / 2, screen.minX + 8), screen.maxX - width - 8)
+        p.setFrame(NSRect(x: x, y: a.y - 6 - height, width: width, height: height), display: true)
     }
 
     func windowDidResignKey(_ n: Notification) {
