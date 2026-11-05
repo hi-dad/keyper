@@ -1,10 +1,8 @@
 # Keyper
 
-<img src="images/icon.png" alt="Keyper app icon" width="128">
+<img src="images/hero.png" alt="Keyper: every hotkey you use, one click away in your menu bar. Grouped by app, add your own in seconds, show keys as ⌘, Command or Cmd. The panel hangs under a keycap icon in the menu bar, listing shortcuts for Screenshots, Spotlight, Shelfie, Copy Collector, Window Pane Relief and Paperlight." width="720">
 
 **A tiny Mac menu bar app that keeps the hotkeys you use in one list, grouped by app.**
-
-<img src="images/keyper.gif" alt="Keyper's panel: your shortcuts grouped by app, and Settings" width="400">
 
 ### [⬇️ Download Keyper](https://github.com/hi-dad/keyper/releases/latest/download/Keyper.dmg)
 Free · macOS 14 or newer · no permissions, no account, offline
@@ -17,6 +15,8 @@ Free · macOS 14 or newer · no permissions, no account, offline
 A keycap with ⌘ appears in your menu bar. Can't see it? Look behind any « arrow in a full menu bar.
 
 ## How to use
+
+<img src="images/keyper.gif" alt="Keyper's panel: your shortcuts grouped by app, and Settings" width="400">
 
 - **Your shortcuts, one section per app.** Keyper finds hotkeys it can read on its own (App Shortcuts you set in System Settings, and apps that save their hotkeys the common way).
 - **Add the rest yourself** in Settings (gear): **+ Add shortcut** inside any section, or **+ New section** for an app or topic of your own, like Screenshots.
