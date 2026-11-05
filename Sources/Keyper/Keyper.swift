@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Sparkle
 import SwiftUI
 
@@ -55,26 +56,110 @@ enum KeyperMain {
     }
 }
 
-struct KeyperApp: App {
-    @StateObject var store = Store.shared
-    @StateObject var ui = UIState.shared
+/// Starts Keyper as a menu bar app (no Dock icon).
+enum KeyperApp {
+    static let delegate = AppDelegate()
+    static func main() {
+        let app = NSApplication.shared
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        app.run()
+    }
+}
 
-    init() { Updates.start() }
+final class DropPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
 
-    var body: some Scene {
-        MenuBarExtra {
-            PanelView()
-                .environmentObject(store)
-                .environmentObject(ui)
-                // Re-read every shortcut each time the panel opens, so the list is never out of date.
-                .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-                    store.refresh()
-                }
-                .onAppear { store.refresh() }
-        } label: {
-            Image(nsImage: MenuBarIcon.image)
+/// The menu bar icon and its panel. Our own panel (not SwiftUI's MenuBarExtra window, which keeps the
+/// size it once had and showed a glassy margin around the content) so it always fits what's inside.
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    var item: NSStatusItem!
+    var drop: DropPanel?
+    var host: NSHostingView<AnyView>?
+    var lastClose = Date.distantPast
+    var clickMonitor: Any?
+    var watchers: Set<AnyCancellable> = []
+
+    func applicationDidFinishLaunching(_ n: Notification) {
+        Updates.start()
+        item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = MenuBarIcon.image
+        item.button?.target = self
+        item.button?.action = #selector(toggleDrop)
+        // For checking the panel on screen: `open Keyper.app --args -openOnLaunch YES [-openPage settings]`.
+        if UserDefaults.standard.bool(forKey: "openOnLaunch") {
+            if UserDefaults.standard.string(forKey: "openPage") == "settings" { UIState.shared.page = .settings }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.openDrop() }
         }
-        .menuBarExtraStyle(.window)
+    }
+
+    @objc func toggleDrop() {
+        if drop?.isVisible == true { closeDrop(); return }
+        // The same click on the icon may already have closed it a moment ago; then it meant "close".
+        if Date().timeIntervalSince(lastClose) < 0.4 { return }
+        openDrop()
+    }
+
+    func openDrop() {
+        if drop == nil {
+            let p = DropPanel(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+                              styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            p.isOpaque = false; p.backgroundColor = .clear; p.hasShadow = true
+            p.level = .popUpMenu
+            p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            p.isReleasedWhenClosed = false
+            let fx = NSVisualEffectView()
+            fx.material = .popover; fx.state = .active; fx.blendingMode = .behindWindow
+            fx.wantsLayer = true; fx.layer?.cornerRadius = 12; fx.layer?.masksToBounds = true
+            let h = NSHostingView(rootView: AnyView(PanelView().environmentObject(Store.shared).environmentObject(UIState.shared)))
+            host = h
+            h.autoresizingMask = [.width, .height]
+            fx.addSubview(h)
+            p.contentView = fx
+            h.frame = fx.bounds
+            p.delegate = self
+            drop = p
+            // Resize whenever what's shown changes (page, text size, hidden items...).
+            Store.shared.objectWillChange.merge(with: UIState.shared.objectWillChange)
+                .sink { [weak self] _ in DispatchQueue.main.async { self?.fitDrop() } }.store(in: &watchers)
+        }
+        // Re-read every shortcut each time the panel opens, so the list is never out of date.
+        Store.shared.refresh()
+        fitDrop()
+        drop?.makeKeyAndOrderFront(nil)
+        item.button?.highlight(true)
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.closeDrop()
+        }
+    }
+
+    func closeDrop() {
+        if drop?.isVisible == true { lastClose = Date() }
+        drop?.orderOut(nil)
+        item.button?.highlight(false)
+        if let c = clickMonitor { NSEvent.removeMonitor(c); clickMonitor = nil }
+    }
+
+    /// Exactly the size of the content, top edge pinned just under the icon.
+    func fitDrop() {
+        guard let h = host, let p = drop, let b = item.button, let bw = b.window else { return }
+        let size = h.fittingSize
+        guard size.width > 0, size.height > 0 else { return }
+        let screen = bw.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
+        let height = min(ceil(size.height), screen.height - 24), width = ceil(size.width)
+        let icon = bw.convertToScreen(b.convert(b.bounds, to: nil))
+        let x = min(max(icon.midX - width / 2, screen.minX + 8), screen.maxX - width - 8)
+        p.setFrame(NSRect(x: x, y: icon.minY - 6 - height, width: width, height: height), display: true)
+    }
+
+    func windowDidResignKey(_ n: Notification) {
+        guard (n.object as? NSPanel) === drop else { return }
+        // A popover inside the panel (icon picker, hover note) takes key for a moment; keep the panel open.
+        if NSApp.keyWindow != nil && NSApp.keyWindow !== drop { return }
+        if let b = item.button, let bw = b.window,
+           bw.convertToScreen(b.convert(b.bounds, to: nil)).contains(NSEvent.mouseLocation) { return }
+        closeDrop()
     }
 }
 
