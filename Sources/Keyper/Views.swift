@@ -304,9 +304,6 @@ struct SettingsPage: View {
             }
             .pickerStyle(.segmented).labelsHidden()
 
-            label("Section order · drag a row to move it").padding(.top, 8)
-            SectionOrder()
-
             label("Sections").padding(.top, 8)
             VStack(alignment: .leading, spacing: 16) {
                 ForEach(store.sections) { s in sectionBlock(s) }
@@ -333,6 +330,19 @@ struct SettingsPage: View {
     func sectionBlock(_ s: Section) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             SectionHeader(name: s.name, icon: s.icon, color: s.color)
+                .overlay(alignment: .topTrailing) {
+                    // Small arrows, in the same columns as the star and eye buttons below.
+                    let i = store.sections.firstIndex { $0.id == s.id } ?? 0
+                    HStack(spacing: 2) {
+                        smallButton("chevron.up", i == 0 ? .clear : .secondary, "Move up") { store.moveSection(s.id, by: -1) }
+                            .disabled(i == 0)
+                        smallButton("chevron.down", i == store.sections.count - 1 ? .clear : .secondary, "Move down") {
+                            store.moveSection(s.id, by: 1)
+                        }
+                        .disabled(i == store.sections.count - 1)
+                    }
+                    .offset(y: -2)
+                }
             .overlay(alignment: .topLeading) {
                 // The icon tile opens the icon and color picker.
                 Color.clear.frame(width: 24, height: 24).contentShape(Rectangle())
@@ -345,13 +355,13 @@ struct SettingsPage: View {
                 let it = s.items[i]
                 HStack(spacing: 2) {
                     RenameField(item: it)
+                    if store.isCustom(it.id) {
+                        smallButton("trash", .secondary, "Delete this shortcut you added") { store.removeCustom(it.id) }
+                    }
                     smallButton(it.favorite ? "star.fill" : "star", it.favorite ? .yellow : .secondary,
                                 it.favorite ? "Remove from Favorites" : "Add to Favorites") { store.toggle(\.favorites, it.id) }
                     smallButton(it.hidden ? "eye.slash" : "eye", .secondary, it.hidden ? "Show" : "Hide") {
                         store.toggle(\.hidden, it.id)
-                    }
-                    if store.isCustom(it.id) {
-                        smallButton("trash", .secondary, "Delete this shortcut you added") { store.removeCustom(it.id) }
                     }
                 }
             }
@@ -441,31 +451,6 @@ struct AddShortcut: View {
 
     func reset() {
         open = false; app = ""; name = ""; key = ""; mods = []; problem = nil
-    }
-}
-
-/// The order of sections, as a plain list you can drag whole rows in (much easier to grab than a small handle).
-struct SectionOrder: View {
-    @EnvironmentObject var store: Store
-    var body: some View {
-        let sections = store.sections
-        List {
-            ForEach(sections) { s in
-                HStack(spacing: 9) {
-                    IconTile(icon: s.icon, color: s.color)
-                    Text(s.name).font(.system(size: sz(13)))
-                    Spacer()
-                    Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
-                }
-                .padding(.vertical, 3)
-            }
-            .onMove { from, to in store.moveSections(from: from, to: to) }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .scrollDisabled(true)
-        .frame(height: CGFloat(sections.count) * sz(34) + 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
     }
 }
 
