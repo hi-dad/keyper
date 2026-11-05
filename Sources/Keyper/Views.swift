@@ -25,14 +25,10 @@ struct PanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if ui.page != .settings {
-                Choice(options: [("My shortcuts", Page.mine), ("All Mac shortcuts", Page.mac)], selection: $ui.page)
-                .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
-            }
             if ui.picture {
                 content.padding(14)
             } else {
-                // Fills whatever is left, so every page (with or without the tabs) is the same height.
+                // Fills whatever is left, so every page is the same height.
                 ScrollView {
                     content.padding(14)
                 }
@@ -41,7 +37,7 @@ struct PanelView: View {
             Divider()
             bottomBar.padding(.horizontal, 10).padding(.vertical, 7)
         }
-        .frame(width: sz(400))
+        .frame(width: sz(300))
         .frame(height: ui.picture ? nil : 600)
         // Built-in controls (dropdowns, pickers, text boxes, buttons) follow the Text size setting too.
         .controlSize(store.textScale < 1 ? .small : store.textScale > 1.2 ? .extraLarge : store.textScale > 1 ? .large : .regular)
@@ -70,6 +66,13 @@ struct PanelView: View {
             }
             Spacer()
             Button {
+                ui.page = ui.page == .mac ? .mine : .mac
+            } label: {
+                Label("Mac shortcuts", systemImage: "command").font(.system(size: sz(12)))
+            }
+            .buttonStyle(.plain).foregroundStyle(ui.page == .mac ? Color.primary : Color.secondary)
+            .help("All Mac shortcuts")
+            Button {
                 if ui.page == .settings { ui.page = ui.pageBeforeSettings }
                 else { ui.pageBeforeSettings = ui.page; ui.page = .settings }
             } label: {
@@ -82,6 +85,21 @@ struct PanelView: View {
 
 // MARK: Pieces
 
+/// "‹ Title" at the top of the Settings and Mac shortcuts pages.
+struct PageHeader: View {
+    let title: String
+    let back: () -> Void
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: back) {
+                Image(systemName: "chevron.left").font(.system(size: sz(14), weight: .semibold))
+                    .frame(width: sz(24), height: sz(24)).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            Text(title).font(.system(size: sz(15), weight: .semibold))
+        }
+    }
+}
+
 /// A row of choices like a segmented control, but drawn by Keyper so its text follows the Text size setting
 /// (Mac's built-in pickers keep their own text size).
 struct Choice<T: Hashable>: View {
@@ -92,7 +110,7 @@ struct Choice<T: Hashable>: View {
             ForEach(options.indices, id: \.self) { i in
                 let (name, value) = options[i]
                 Button { selection = value } label: {
-                    Text(name).font(.system(size: sz(13), weight: selection == value ? .semibold : .regular))
+                    Text(name).font(.system(size: sz(12), weight: selection == value ? .semibold : .regular))
                         .lineLimit(1).frame(maxWidth: .infinity).padding(.vertical, sz(4))
                         .background(RoundedRectangle(cornerRadius: 6)
                             .fill(selection == value ? Color.primary.opacity(0.18) : Color.clear))
@@ -111,8 +129,8 @@ struct IconTile: View {
     let color: String
     var body: some View {
         let c = Store.color(color)
-        Image(systemName: icon).font(.system(size: sz(12), weight: .semibold)).foregroundStyle(c)
-            .frame(width: sz(24), height: sz(24))
+        Image(systemName: icon).font(.system(size: sz(11), weight: .semibold)).foregroundStyle(c)
+            .frame(width: sz(20), height: sz(20))
             .background(RoundedRectangle(cornerRadius: 6).fill(c.opacity(0.2)))
     }
 }
@@ -128,7 +146,7 @@ struct SectionHeader<Leading: View>: View {
             HStack(spacing: 9) {
                 leading
                 IconTile(icon: icon, color: color)
-                Text(name).font(.system(size: sz(14), weight: .semibold))
+                Text(name).font(.system(size: sz(13), weight: .semibold))
                 Spacer()
             }
             Rectangle().fill(Color.primary.opacity(0.35)).frame(height: 2)
@@ -171,14 +189,46 @@ struct KeyCap: View {
     }
 }
 
+/// A shortcut's name with its keys on the right, or, when both don't fit on one line (long names or
+/// keys written as words), the keys on a line of their own under the name.
+struct NameAndKeys<Mark: View>: View {
+    let name: Text
+    let keys: String
+    @ViewBuilder var mark: Mark
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                label.fixedSize()
+                Spacer(minLength: 12)
+                KeyCap(keys: keys)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                label
+                KeyCap(keys: keys)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    var label: some View {
+        HStack(spacing: 6) {
+            name.font(.system(size: sz(13)))
+            mark
+        }
+    }
+}
+
+extension NameAndKeys where Mark == EmptyView {
+    init(name: Text, keys: String) { self.init(name: name, keys: keys) { EmptyView() } }
+}
+
 struct Rows<Row: View>: View {
     let count: Int
     @ViewBuilder let row: (Int) -> Row
     var body: some View {
         VStack(spacing: 0) {
             ForEach(0..<count, id: \.self) { i in
-                if i > 0 { Divider().padding(.leading, 16) }
-                row(i).padding(.leading, 16).padding(.vertical, 6)
+                if i > 0 { Divider().padding(.leading, 12) }
+                row(i).padding(.leading, 12).padding(.vertical, 5)
             }
         }
     }
@@ -197,7 +247,7 @@ struct MinePage: View {
             return s
         }
         let favorites = sections.flatMap(\.items).filter(\.favorite)
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             if !favorites.isEmpty { block("Favorites", "star.fill", "yellow", favorites) }
             ForEach(sections) { s in
                 let items = s.items.filter { !$0.favorite }
@@ -214,11 +264,7 @@ struct MinePage: View {
         VStack(alignment: .leading, spacing: 4) {
             SectionHeader(name: name, icon: icon, color: color)
             Rows(count: items.count) { i in
-                HStack {
-                    Text(items[i].name).font(.system(size: sz(13)))
-                    Spacer(minLength: 12)
-                    KeyCap(keys: items[i].keys)
-                }
+                NameAndKeys(name: Text(items[i].name), keys: items[i].keys)
                 .opacity(items[i].hidden ? 0.45 : 1)
             }
         }
@@ -232,11 +278,12 @@ struct MacPage: View {
     @EnvironmentObject var ui: UIState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            TextField("Search all Mac shortcuts", text: $ui.search).textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: 14) {
+            PageHeader(title: "All Mac shortcuts") { ui.page = .mine }
+            TextField("Search", text: $ui.search).textFieldStyle(.roundedBorder)
             ForEach(Catalog.mac, id: \.id) { cat in
                 let q = ui.search.lowercased()
-                let items = cat.items.filter { q.isEmpty || $0.name.lowercased().contains(q) }
+                let items = cat.items.filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.display.lowercased().contains(q) }
                 if !items.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         SectionHeader(name: cat.name, icon: cat.icon, color: cat.color)
@@ -251,15 +298,14 @@ struct MacPage: View {
         let st = store.macState(s)
         let added = store.onPage.contains(s.id)
         return HStack(spacing: 6) {
-            Text(s.name).font(.system(size: sz(13)))
-            // You changed this one and it isn't on your page: say so.
-            if let def = st.changedFrom, !added {
-                ChangedMark(off: st.off, note: st.off
-                    ? "Turned off on your Mac.\nApple's default: \(store.show(def))"
-                    : "Customized on your Mac.\nApple's default: \(store.show(def))")
+            NameAndKeys(name: Text(s.display), keys: st.keys) {
+                // You changed this one and it isn't on your page: say so.
+                if let def = st.changedFrom, !added {
+                    ChangedMark(off: st.off, note: st.off
+                        ? "Turned off on your Mac.\nApple's default: \(store.show(def))"
+                        : "Customized on your Mac.\nApple's default: \(store.show(def))")
+                }
             }
-            Spacer(minLength: 12)
-            KeyCap(keys: st.keys)
             Button {
                 store.toggle(\.onPage, s.id)
             } label: {
@@ -297,12 +343,7 @@ struct SettingsPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Button { ui.page = ui.pageBeforeSettings } label: {
-                    Image(systemName: "chevron.left").font(.system(size: sz(14), weight: .semibold)).frame(width: sz(24), height: sz(24))
-                }.buttonStyle(.plain)
-                Text("Settings").font(.system(size: sz(16), weight: .semibold))
-            }
+            PageHeader(title: "Settings") { ui.page = ui.pageBeforeSettings }
             label("Show keys as")
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                 ForEach([Mod.cmd, .opt, .ctl, .sh]) { m in
@@ -310,7 +351,7 @@ struct SettingsPage: View {
                         Text(m.word).font(.system(size: sz(13))).frame(maxWidth: .infinity, alignment: .leading)
                         Choice(options: [(m.symbol, KeyStyle.symbol), (m.word, .word)] + (m == .sh ? [] : [(m.short, .short)]),
                                selection: Binding(get: { store.style(m) }, set: { store.setStyle(m, $0) }))
-                            .frame(width: sz(220))
+                            .frame(width: sz(190))
                     }
                 }
             }
@@ -367,7 +408,7 @@ struct SettingsPage: View {
                 }
             .overlay(alignment: .topLeading) {
                 // The icon tile opens the icon and color picker.
-                Color.clear.frame(width: sz(24), height: sz(24)).contentShape(Rectangle())
+                Color.clear.frame(width: sz(20), height: sz(20)).contentShape(Rectangle())
                     .onTapGesture { picking = s.id }
                     .popover(isPresented: Binding(get: { picking == s.id }, set: { if !$0 { picking = nil } })) {
                         StylePicker(section: s).environmentObject(store)

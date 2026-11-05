@@ -134,7 +134,7 @@ final class Store: ObservableObject {
         var all: [Section] = []
         for cat in Catalog.mac {
             let items = cat.items.filter { onPage.contains($0.id) }.map { s in
-                item(s.id, s.name, macState(s).keys)
+                item(s.id, s.display, macState(s).keys)
             }
             if !items.isEmpty { all.append(section(cat.id, cat.name, cat.icon, cat.color, items)) }
         }
